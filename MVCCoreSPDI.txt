@@ -1,0 +1,220 @@
+Implementing states
+
+Create new project -> AsP.Net Core Web App (MVC) ->MVCCoreSPDI (Filename)
+
+Add Package Nuget PAckage Manager ->System.Data.SqlClient
+
+Create Folders Repositories & Abstract
+
+In Models
+    -> Create class State
+        public class State
+        {
+            public int StateId { get; set; }
+            public string StateName { get; set; }
+        }
+
+First listing values from database
+
+In Abstract
+    -> Create Interace IStateRepository
+        public interface IStateRepository
+        {
+            List<State> GetStates();
+        }
+
+In Repositories
+    -> Create class StateRepository and add interface
+    public class StateRepository : IStateRepository
+    {
+        SqlConnection _sqlConnection;
+        IConfiguration _configuration;
+        public StateRepository(IConfiguration configuration)
+        {
+            _configuration = configuration;
+            _sqlConnection = new SqlConnection(this._configuration["SqlConnectionString"]);
+        }
+        public List<State> GetStates()
+        {
+            DataSet ds = new DataSet();
+            SqlDataAdapter da = new SqlDataAdapter("spGetStates", _sqlConnection);
+            da.Fill(ds, "States");
+            List<State> states = new List<State>();
+            foreach (DataRow item in ds.Tables["States"].Rows)
+            {
+                State state = new State
+                {
+                    StateId = Int32.Parse(item["StateId"].ToString()),
+                    StateName = item["StateName"].ToString()
+                };
+                states.Add(state);
+            }
+            return states;
+        }
+    }
+
+In Startup.cs add services in ConfigureServices
+    services.AddSingleton<IStateRepository, StateRepository>();
+
+In HomeController 
+    IStateRepository _stateRepository;   
+    public HomeController(ILogger<HomeController> logger, IStateRepository stateRepository)
+    {
+            _stateRepository = stateRepository;
+            _logger = logger;
+    }
+
+    public IActionResult Index()
+    {
+            var states = _stateRepository.GetStates();
+            return View(states);
+    }
+
+    ->Then create view for Index using razor view
+
+Similarly implement create, update , delete and details for states
+
+In IStateRepository add other functions
+    public interface IStateRepository
+    {
+        List<State> GetStates();
+        public void InsertState(State state);
+        public State GetStateById(int id);
+        public void DeleteState(int id);
+        public void UpdateState(State state);
+    }
+
+In StateRepository add other function definitions
+    public class StateRepository : IStateRepository
+    {
+        SqlConnection _sqlConnection;
+        IConfiguration _configuration;
+        public StateRepository(IConfiguration configuration)
+        {
+            _configuration = configuration;
+            _sqlConnection = new SqlConnection(this._configuration["SqlConnectionString"]);
+        }
+
+        public void DeleteState(int id)
+        {
+            _sqlConnection.Open();
+            SqlCommand cmd = new SqlCommand("spDeleteState", _sqlConnection);
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.Parameters.AddWithValue("@pStateId", id);
+            cmd.ExecuteNonQuery();
+            cmd.Dispose();
+            _sqlConnection.Close();
+        }
+
+        public State GetStateById(int id)
+        {
+            DataSet ds = new DataSet();
+            SqlDataAdapter da = new SqlDataAdapter("spGetStateById " + id, _sqlConnection);
+            da.Fill(ds, "States");
+            DataRow row = ds.Tables["States"].Rows[0];
+            State state = new State
+            {
+                StateId = Int32.Parse(row["StateId"].ToString()),
+                StateName = row["StateName"].ToString()
+            };
+            return state;
+        }
+
+        public List<State> GetStates()
+        {
+            DataSet ds = new DataSet();
+            SqlDataAdapter da = new SqlDataAdapter("spGetStates", _sqlConnection);
+            da.Fill(ds, "States");
+            List<State> states = new List<State>();
+            foreach (DataRow item in ds.Tables["States"].Rows)
+            {
+                State state = new State
+                {
+                    StateId = Int32.Parse(item["StateId"].ToString()),
+                    StateName = item["StateName"].ToString()
+                };
+                states.Add(state);
+            }
+            return states;
+        }
+
+        public void InsertState(State state)
+        {
+            _sqlConnection.Open();
+            SqlCommand cmd = new SqlCommand("spInsertState", _sqlConnection);
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.Parameters.AddWithValue("@pStateName", state.StateName);
+            cmd.ExecuteNonQuery();
+            cmd.Dispose();
+            _sqlConnection.Close();
+        }
+
+        public void UpdateState(State state)
+        {
+            _sqlConnection.Open();
+            SqlCommand cmd = new SqlCommand("spUpdateState", _sqlConnection);
+            cmd.CommandType = CommandType.StoredProcedure;
+            cmd.Parameters.AddWithValue("@pStateId", state.StateId);
+            cmd.Parameters.AddWithValue("@pStateName", state.StateName);
+            cmd.ExecuteNonQuery();
+            cmd.Dispose();
+            _sqlConnection.Close();
+        }
+    }
+
+In HomeController add other actions and views
+    public class HomeController : Controller
+    {
+        private readonly ILogger<HomeController> _logger;
+        IStateRepository _stateRepository;
+        public HomeController(ILogger<HomeController> logger, IStateRepository stateRepository)
+        {
+            _stateRepository = stateRepository;
+            _logger = logger;
+        }
+
+        public IActionResult Index()
+        {
+            var states = _stateRepository.GetStates();
+            return View(states);
+        }
+        public IActionResult Create()
+        {
+            return View();
+        }
+        [HttpPost]
+        public IActionResult Create(State state)
+        {
+            _stateRepository.InsertState(state);
+            return RedirectToAction("Index");
+        }
+        public IActionResult Details(int id)
+        {
+            var state = _stateRepository.GetStateById(id);
+            return View(state);
+        }
+        public IActionResult Delete(int id)
+        {
+            var state = _stateRepository.GetStateById(id);
+            return View(state);
+        }
+        [HttpPost]
+        [ActionName("Delete")]
+        public IActionResult DeleteRecord(int id)
+        {
+            _stateRepository.DeleteState(id);
+            return RedirectToAction("Index");
+        }
+        public IActionResult Edit(int id)
+        {
+            var state = _stateRepository.GetStateById(id);
+            return View(state);
+        }
+        [HttpPost]
+        public IActionResult Edit(State state)
+        {
+            _stateRepository.UpdateState(state);
+            return RedirectToAction("Index");
+        }
+    }
+    ->create the corresponding views
